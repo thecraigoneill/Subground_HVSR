@@ -1,0 +1,8 @@
+numpy
+scipy
+matplotlib
+pandas
+sys
+Glob
+Number
+
