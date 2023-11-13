@@ -23,10 +23,13 @@ See examples in folder "Tutorials" for usage (watch filepaths)
 Inversion via MCMC still in development.
 
 Can do HVSR processing and plotting:
+
 ![example_tromino_data dat_HVSR](https://github.com/thecraigoneill/Subground_HVSR/assets/30849698/d3fc0693-461f-4188-80b5-22287013775e)
 
 Virtual HVSR boreholes:
-![example_tromino_data dathvsr_borelog](https://github.com/thecraigoneill/Subground_HVSR/assets/30849698/402e35f1-1784-4925-a805-89b99214622d)
+
+<img src="https://github.com/thecraigoneill/Subground_HVSR/assets/30849698/402e35f1-1784-4925-a805-89b99214622d" alt="drawing" width="200"/>
+
 
 And gridded sections of HVSR data:
 
