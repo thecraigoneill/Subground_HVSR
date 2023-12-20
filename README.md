@@ -9,11 +9,11 @@ Install with
 
 git clone https://github.com/thecraigoneill/Subground_HVSR
 
-cd FTANos
+cd Subground_HVSR
 
 pip install .
 
-Make sure you have the requirements installed as noted in the requirements.txt file. We recommend an anaconda environment with disba and obspy installed.
+Make sure you have the requirements installed as noted in the requirements.txt file. We recommend an anaconda environment with the relevant  packages installed (these are pretty minimalist, mostly numpy, scipy, pandas, matplotlib, etc. The usual suspects).
 
 # Run examples
 
