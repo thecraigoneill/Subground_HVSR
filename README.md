@@ -20,7 +20,6 @@ Make sure you have the requirements installed as noted in the requirements.txt f
 See examples in folder "Tutorials" for usage (watch filepaths)
 
 # Functionality
-Inversion via MCMC still in development.
 
 Can do HVSR processing and plotting:
 
@@ -34,5 +33,10 @@ Virtual HVSR boreholes:
 And gridded sections of HVSR data:
 
 ![HVSR_gridded2](https://github.com/thecraigoneill/Subground_HVSR/assets/30849698/5bcda34f-b51d-480d-8eff-5fa60054a8cb)
+
+An HVSR transfer function inversion:
+
+![inversion3_fig](https://github.com/thecraigoneill/Subground_HVSR/assets/30849698/b2f42d80-0707-4cbf-9636-1860b547e277)
+
 
 Enjoy.
