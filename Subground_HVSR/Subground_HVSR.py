@@ -13,7 +13,9 @@ from scipy.signal import periodogram, welch,lombscargle
 import pandas as pd
 from scipy.interpolate import interp1d
 from scipy.interpolate import griddata, Rbf
+from scipy.optimize import optimize
 import glob
+import copy
 
 class HVSRForwardModels(object):
     def __init__(self,
@@ -88,6 +90,7 @@ class HVSRForwardModels(object):
         """
 
         freq = np.logspace(np.log10(self.fre1),np.log10(self.fre2),500)
+        #print("Initial freq!!",freq)
         hl = self.h
         vs = self.Vs
         dn = self.ro
@@ -95,6 +98,7 @@ class HVSRForwardModels(object):
         qs = np.ones_like(vs)*(1.0/(2.0*Ds))
         inc_ang=0. 
         depth=0.
+        #print("Transfer function: Vs:",vs)
 
         # Precision of the complex type
         CTP = 'complex128'
@@ -429,13 +433,13 @@ class HVSR_plotting_functions(object):
         DEPTH = np.array([])
         VS = np.array([])
     
-        VSd = np.zeros((6))
-        DEPTHd = np.zeros((6))
+        VSd = np.zeros((8))
+        DEPTHd = np.zeros((8))
     
         VS=np.array([])
         DEPTH = np.array([])
     
-        for i in range(len(Vs)-1):
+        for i in range(len(Vs)):
             if (i==0):
                 cdepth = 0.0
                 DEPTH = np.append(DEPTH,cdepth)
@@ -690,9 +694,6 @@ class HVSR_Processing(object):
 
         return
 
-    def sortKeyFunc(s):
-        return int(s.split("_")[2].split("m")[0])
-
     def plot_HVSR_section(self,):
         """ Requires formatting to the output files of HVSR vs depth from the 
         routine "virtual_Borehole". These were named (self.filename)+"_depth_"+str(chainage)+"m.dat".
@@ -767,4 +768,339 @@ class HVSR_Processing(object):
         plt.savefig("HVSR_gridded2.png")
         plt.close()
         #plt.clim(0,0.4)
+
+
+class HVSR_inversion(object):
+    def __init__(self,               
+                    fre1 = 0.01,
+				    fre2 = 100,
+				    Ds = np.array( [0.05, 0.01, 0.01,0.01]),
+                    Dp = np.array( [0.05, 0.01, 0.01,0.01]),
+				    h = np.array([10, 200,100, 1e3]),
+				    ro = np.array([1000, 2000, 2000, 2000])/1000,
+				    Vs = np.array([500, 1500, 1500, 1500]),
+				    Vp = np.array([500, 3000, 3000, 3000]),
+                    ex = 0.0,
+				    filename = None,
+                    hvsr=None,
+                    hvsr_freq=None,
+                    step_size=0.01, #Recommended 0.25 (there is a multiplier above)
+                    step_floor = 0.002, #Recommended 0.15 (150m/s)
+                    alpha=0.12,  #Recommended 0.5
+                    beta=1.06,  #Recommended 1.1
+                    Vs_ensemble = None,
+                    h_ensemble = None,
+                    Vs_best = None,
+                    hvsr_best = None,
+                    hvsr_best_f = None,
+                    L1_best = 1e6,
+                    hvsr_c = None,
+                    hvsr_c_f = None,
+                    n=1,
+                    n_burn = 1,
+                    L1_old = None
+
+					):
+            self.fre1 = fre1
+            self.fre2 = fre2
+            self.Ds = Ds
+            self.Dp = Dp
+            self.h = h
+            self.ro = ro
+            self.Vs = Vs
+            self.Vp = Vp
+            self.ex = ex
+            self.filename = filename
+            self.hvsr = hvsr
+            self.hvsr_freq = hvsr_freq
+            self.hvsr_c = hvsr_c
+            self.hvsr_c_f = hvsr_c_f
+            self.L1_best = L1_best
+            self.step_size= step_size 
+            self.step_floor = step_floor 
+            self.alpha= alpha
+            self.beta= beta  
+            self.Vs_ensemble = Vs_ensemble
+            self.h_ensemble = h_ensemble
+            self.Vs_best = Vs_best
+            self.hvsr_best = hvsr_best,
+            self.hvsr_best_f = hvsr_best_f
+            self.n = n
+            self.n_burn = n_burn
+            self.L1_old = L1_old
+
+    def moving_average(self, a, n=3) :
+        ret = np.cumsum(a, dtype=float)
+        ret[n:] = ret[n:] - ret[:-n]
+        return ret[n - 1:] / n
+
+    def L1_norm(self,):
+        Vs = self.Vs
+        h=self.h
+        #To invert for Vs and h, we use empirical relationships to get consistent Vp and ro.
+        if (np.all(Vs > 0)):
+            Vp = 1000*(Vs/1000 + 1.164)/0.902
+            ro=(310*(Vp*1000)**0.25)/1000
+        else:
+            Vp = 1000*np.ones_like(Vs)
+            ro=(310*(Vp*1000)**0.25)/1000
+        hvsr=self.hvsr
+        hvsr_freq = self.hvsr_freq
+        
+        mod1 = HVSRForwardModels(ro=ro,Vs=Vs,Vp=Vp,fre1=self.fre1,fre2=self.fre2, Ds=self.Ds,Dp=self.Dp,h=self.h)
+        #f_c, hvsr_c = mod1.Transfer_Function()
+        #print(f_c,hvsr_c)
+        #self.hvsr_c = hvsr_c
+        #self.hvsr_c_f = f_c
+        #fm=interp1d(f_c,hvsr_c,fill_value="extrapolate")
+        #hvsr_2=fm(hvsr_freq)
+        try:
+            #mod1 = HVSRForwardModels(ro=ro,Vs=Vs,Vp=Vp,fre1=self.fre1,fre2=self.fre2, Ds=self.Ds,Dp=self.Dp,h=self.h)
+            f_c, hvsr_c = mod1.Transfer_Function()
+            #print("L1, transfer function -1:",hvsr_c[-1])
+            self.hvsr_c = hvsr_c
+            self.hvsr_c_f = f_c
+            fm=interp1d(f_c,hvsr_c,fill_value="extrapolate")
+            hvsr_2=fm(hvsr_freq)
+            # Scale to HVSR data range
+            #shvsr_2 *= np.max(hvsr)/np.max(hvssr_c)
+            #print(" .... L1   worked")
+        except:
+            hvsr_2=np.ones_like(hvsr) * 1e9
+            #to=t
+            #print(" .... L1 bombed")
+        if (np.any(Vs > 5000)):
+            hvsr_2=np.ones_like(hvsr) * 1e9
+        if (np.any(Vs < 100)):
+            hvsr_2=np.ones_like(hvsr) * 1e9
+        #print("   h:",h)
+        if (np.any(h < 0)):
+            #print("hi") #Not seeing this - why?
+            hvsr_2=np.ones_like(hvsr) * 1e9
+        L1 = np.sum(np.abs(hvsr_2 - hvsr))
+        return L1
+
+
+    def MCMC_step(self,i):
+        Vfac=500
+        hfac=10
+        x_start = np.append(self.Vs/Vfac, self.h/hfac)
+        dim2=np.size(self.Vs)
+
+
+        Vs = self.Vs
+        h = self.h
+
+        L1 = self.L1_norm()
+        L1_old = self.L1_old
+        if (i==0):
+            L1_old = L1
+            self.L1_best = L1
+        elif (L1 < L1_old):
+            #Accept
+            L1_old = L1
+            Vs = np.copy(self.Vs)
+            h = np.copy(self.h)
+        elif (L1 >= L1_old):
+            rdm = np.random.uniform(0.0,1.0,1)[0]
+            # Want to randomly reward if only a little bigger
+            # This dice term can blow out, but < should catch silly increases
+            # If L1 close to L1_old, 2nd term should be small, and dice ~1
+            dice =  ((1 - ( np.abs(L1 - L1_old)/np.max((L1_old,L1)))))
+            if (  dice < rdm):
+                #Accept anyway
+                L1_old = L1
+                Vs = np.copy(self.Vs)
+                h = np.copy(self.h)
+        self.Vs = Vs
+        self.h = h
+        if (L1 <= self.L1_best):
+            self.L1_best = L1
+            self.Vs_best = Vs
+            self.hvsr_best = self.hvsr_c
+            self.hvsr_best_f = self.hvsr_c_f
+        print(i,L1,self.L1_best,Vs[0])
+
+        # Now move
+        Vfac=500
+        hfac=10
+        x_start = np.append(self.Vs/Vfac, self.h/hfac)
+
+        self.Vs_ensemble[i] = self.Vs
+        self.h_ensemble[i]=self.h
+        self.L1_old = L1_old
+        Vs0a=Vs
+        try:
+            stdv = self.step_floor + self.alpha*x_start**self.beta
+        except:
+            stdv = 10.0
+
+        # CALCULATE THE NOISE TO ADD
+        #local_mean = self.moving_average(Vs0a,3)
+        #means = -0.5*(Vs0a[1:-1] - local_mean)/local_mean
+        #means2 = np.hstack(([0],means,means[-1])) #NOTE THESE ARE PERTURBATIONS TO LOCAL MEAN!
+        noise = np.random.normal(0,stdv,np.size(x_start))*self.step_size
+        #noise = noise_deadener(Vs0a,noise) #Works out local mean, makes sure noise is within +/- 3 stdv
+
+        self.Vs = np.abs(x_start[:dim2] + noise[:dim2]) * Vfac
+        self.h=np.abs(x_start[dim2:] + noise[dim2:])*hfac
+
+        #print("...",Vs0a,noise)
+        self.Vp = (Vs0a + 1.164)/0.902   # Garnders relationships etc
+        self.ro=(310*(self.Vp*1000)**0.25)/1000
+
+    def MCMC_walk(self,):
+        n = self.n
+        nburn = self.n_burn
+        Vs_ensemble = np.zeros((n, np.shape(self.Vs)[0]))
+        h_ensemble = np.zeros((n, np.shape(self.h)[0]))
+
+        self.Vs_ensemble = Vs_ensemble
+        self.h_ensemble = h_ensemble
+
+        for i in range(nburn):
+            self.MCMC_step(i)
+            #print(i)
+        for i in range(n):
+            #print(i)
+            self.MCMC_step(i)
+
+        return(self.h,self.Vs_ensemble,self.h_ensemble,self.Vs_best,self.L1_best,self.hvsr_best,self.hvsr_best_f)
+
+    def nelder_mead(self,
+                step=250.1, no_improve_thr=10e-6,
+                no_improv_break=40, max_iter=0,
+                alpha=12.5, gamma=18., rho=0.65, sigma=0.6):
+        '''
+            @param f (function): function to optimize, must return a scalar score
+            and operate over a numpy array of the same dimensions as x_start
+            @param x_start (numpy array): initial position
+            @param step (float): look-around radius in initial step
+            @no_improv_thr,  no_improv_break (float, int): break after no_improv_break iterations with
+            an improvement lower than no_improv_thr
+             @max_iter (int): always break after this number of iterations.
+            Set it to 0 to loop indefinitely.
+            @alpha, gamma, rho, sigma (floats): parameters of the algorithm
+            (see Wikipedia page for reference)
+
+            return: tuple (best parameter array, best score)
+        '''
+
+        # init
+        Vfac=500
+        hfac=10
+        x_start = np.append(self.Vs/Vfac, self.h/hfac)
+
+        dim2=np.size(self.Vs)
+        dim = len(x_start)
+        prev_best = self.L1_norm() #(x_start)
+        no_improv = 0
+        res = [[x_start, prev_best]]
+
+        for i in range(dim):
+            x = copy.copy(x_start)
+            x[i] = x[i] + step
+            self.Vs =x[:dim2]*Vfac
+            self.h=x[dim2:]*hfac
+            score = self.L1_norm() #f(x)
+            res.append([x, score])
+
+        # simplex iter
+        iters = 0
+        while 1:
+            # order
+            res.sort(key=lambda x: x[1])
+            best = res[0][1]
+
+            # break after max_iter
+            if max_iter and iters >= max_iter:
+                return res[0]
+            iters += 1
+
+            # break after no_improv_break iterations with no improvement
+            print( '...best so far:', best, self.h)
+
+            if best < prev_best - no_improve_thr:
+                no_improv = 0
+                prev_best = best
+            else:
+                no_improv += 1
+
+            if no_improv >= no_improv_break:
+                return res[0]
+
+            # centroid
+            x0 = [0.] * dim
+            for tup in res[:-1]:
+                for i, c in enumerate(tup[0]):
+                    x0[i] += c / (len(res)-1)
+
+            # reflection
+            xr = x0 + alpha*(x0 - res[-1][0])
+            #self.Vs, self. h =xr
+            self.Vs =xr[:dim2]*Vfac
+            self.h=xr[dim2:]*hfac
+
+            rscore = self.L1_norm() #f(xr)
+            if res[0][1] <= rscore < res[-2][1]:
+                del res[-1]
+                res.append([xr, rscore])
+                continue
+
+            # expansion
+            if rscore < res[0][1]:
+                xe = x0 + gamma*(x0 - res[-1][0])
+                #self.Vs, self.h =xe
+                self.Vs =xe[:dim2]*Vfac
+                self.h=xe[dim2:]*hfac
+
+                escore = self.L1_norm() #f(xe)
+                if escore < rscore:
+                    del res[-1]
+                    res.append([xe, escore])
+                    continue
+                else:
+                    del res[-1]
+                    res.append([xr, rscore])
+                    continue
+
+            # contraction
+            xc = x0 + rho*(x0 - res[-1][0])
+            #self.Vs, self.h =xc
+            self.Vs =xc[:dim2]*Vfac
+            self.h=xc[dim2:]*hfac
+
+            cscore = self.L1_norm() #f(xc)
+            if cscore < res[-1][1]:
+                del res[-1]
+                res.append([xc, cscore])
+                continue
+
+            # reduction
+            x1 = res[0][0]
+            nres = []
+            for tup in res:
+                redx = x1 + sigma*(tup[0] - x1)
+                #self.Vs,self.h =redx
+                self.Vs =redx[:dim2]*Vfac
+                self.h=redx[dim2:]*hfac
+
+                score = self.L1_norm() #f(redx)
+                nres.append([redx, score])
+            res = nres
+
+
+
+    def Amoeba_crawl(self,):
+        Vfac=500
+        hfac=10
+        dim2 = np.size(self.Vs)
+        result = self.nelder_mead()
+        Vs = result[0][:dim2]*Vfac
+        h = result[0][dim2:]*hfac
+        print("Amoeba results:",np.c_[Vs,h])
+        return(Vs,h)
+
+        
+    
 
