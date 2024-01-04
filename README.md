@@ -27,13 +27,16 @@ Can do HVSR processing and plotting:
 
 Virtual HVSR boreholes:
 
-<img src="https://github.com/thecraigoneill/Subground_HVSR/assets/30849698/402e35f1-1784-4925-a805-89b99214622d" alt="drawing" width="200"/>
+<div style="text-align:center">
+<img src="https://github.com/thecraigoneill/Subground_HVSR/assets/30849698/c076e48a-d6ae-48e9-8243-bc0bde814c46">
+</div>
 
 
 And gridded sections of HVSR data:
 <div style="text-align:center">
 <img src="https://github.com/thecraigoneill/Subground_HVSR/assets/30849698/5bcda34f-b51d-480d-8eff-5fa60054a8cb">
 </div>
+
 
 An HVSR transfer function inversion:
 
