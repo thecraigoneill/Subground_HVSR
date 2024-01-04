@@ -32,7 +32,7 @@ Virtual HVSR boreholes:
 
 And gridded sections of HVSR data:
 <div style="text-align:center">
-![HVSR_gridded2](https://github.com/thecraigoneill/Subground_HVSR/assets/30849698/5bcda34f-b51d-480d-8eff-5fa60054a8cb)
+<img src="https://github.com/thecraigoneill/Subground_HVSR/assets/30849698/5bcda34f-b51d-480d-8eff-5fa60054a8cb">
 </div>
 
 An HVSR transfer function inversion:
