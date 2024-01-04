@@ -3,15 +3,15 @@ import matplotlib.pyplot as plt
 from Subground_HVSR import *
 
 Poisson=0.4
-Vs = np.array([250, 700, 1800, 2500])
+Vs = np.array([350, 1500])
 #Vp = 1000*(Vs/1000 + 1.164)/0.902
 #ro=(310*(Vp*1000)**0.25)/1000
 Vp = Vs * np.sqrt( (1-Poisson)/(0.5 - Poisson))
 ro= 1740 * (Vp/1000)**0.25
-h = np.array([10, 10,17, 1e3])
+h = np.array([17, 1e3])
 #Damping
-Dp=np.array( [0.1, 0.05, 0.01, 0.01])
-Ds=np.array( [0.1, 0.05, 0.01,0.01])
+Dp=np.array( [0.1, 0.05])
+Ds=np.array( [0.1, 0.05])
 
 f1=0.001
 f2=150.
@@ -24,13 +24,13 @@ print("VS",mod1.Vs)
 
 #print("mod1",mod1.Transfer_Function())
 
-Vs_init=np.array([500, 1000, 1500, 2000])
+Vs_init=np.array([500, 1000])
 Vp_init = Vs_init * np.sqrt( (1-Poisson)/(0.5 - Poisson))
 ro_init= 1740 * (Vp/1000)**0.25
 
 #Vp_init= 1000*(Vs_init/1000 + 1.164)/0.902
 #ro_init=(310*(Vp*1000)**0.25)/1000
-h_init = np.array([12,11,18,1e3])
+h_init = np.array([12,1e3])
 
 mod0 = HVSRForwardModels(fre1=f1,fre2=f2,f=freq,Ds=Ds,Dp=Dp,h=h_init,ro=ro_init,Vs=Vs_init,Vp=Vp_init,ex=0.0)
 print("VS", mod0.Vs)
@@ -62,7 +62,7 @@ hvsr_best_f, hvsr_best = mod2.HV()
 #  End amoeba, create new model for MCMC 
 ###################################################################################################
 #print("Results",np.shape(results))
-run2 = HVSR_inversion(hvsr=hvsr,hvsr_freq=f,n=8000,n_burn=1,step_size=0.019,step_floor=0.0,alpha=0.17,beta=1.09,fre1=f1,fre2=f2,Ds=Ds,Dp=Dp,h=h_best,ro=ro_best,Vs=Vs_best,Vp=Vp_best,Vfac=2000,Hfac=50)
+run2 = HVSR_inversion(hvsr=hvsr,hvsr_freq=f,n=5000,n_burn=1,step_size=0.004,step_floor=0.0,alpha=0.17,beta=1.09,fre1=f1,fre2=f2,Ds=Ds,Dp=Dp,h=h_best,ro=ro_best,Vs=Vs_best,Vp=Vp_best,Vfac=2000,Hfac=0.1)
 results = run2.MCMC_walk()
 h_best2 = results[0]
 Vs_ens2 = results[1]
@@ -89,7 +89,7 @@ plt.plot(hvsr_best_f,hvsr_best,color="xkcd:blood red",label="Inversion NM",lines
 plt.plot(hvsr_best_f2,hvsr_best2,color="xkcd:kelly green",label="Inversion MCMC",linestyle="--")
 
 plt.legend()
-plt.savefig("hvsr_inversion_test2.png")
+plt.savefig("2Layer_hvsr_inversion_test2.png")
 plt.show()
 
 p4p =  HVSR_plotting_functions(h=h,ro=ro,Vs=Vs,Vp=Vp)
@@ -120,8 +120,9 @@ plt.legend()
 
 plt.ylim(np.max(D[-3])+40,0)
 #plt.xlim(np.min(VS)-50,np.max(VS)+50)
-plt.savefig("model2.png")
+plt.savefig("2Layer_model2.png")
 plt.show()
+
 
 
 
