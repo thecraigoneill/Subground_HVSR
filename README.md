@@ -32,13 +32,13 @@ Virtual HVSR boreholes:
 </div>
 
 
-And gridded sections of HVSR data:
+Gridded sections (profiling) of HVSR data:
 <div style="text-align:center">
 <img src="https://github.com/thecraigoneill/Subground_HVSR/assets/30849698/5bcda34f-b51d-480d-8eff-5fa60054a8cb">
 </div>
 
 
-An HVSR transfer function inversion:
+And HVSR data inversions:
 
 ![inversion_results_LR_2D](https://github.com/thecraigoneill/Subground_HVSR/assets/30849698/8416d3d2-de44-49df-b360-4cfe50bea141)
 
