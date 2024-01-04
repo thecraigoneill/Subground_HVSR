@@ -19,8 +19,8 @@ import copy
 
 class HVSRForwardModels(object):
     def __init__(self,
-				 fre1 = 10,
-				 fre2 = 100,
+				 fre1 = 1,
+				 fre2 = 60,
 				 Ds = np.array( [0.05, 0.01, 0.01,0.01]),
                  Dp = np.array( [0.05, 0.01, 0.01,0.01]),
 				 h = np.array([10, 200,100, 1e3]),
@@ -28,6 +28,8 @@ class HVSRForwardModels(object):
 				 Vs = np.array([500, 1500, 1500, 1500]),
 				 Vp = np.array([500, 3000, 3000, 3000]),
                  ex = 0.0,
+                 fref = 1.0,
+                 f = np.logspace(np.log10(1),np.log10(60),500),
 				 filename = None
 					):
             self.fre1 = fre1
@@ -39,6 +41,8 @@ class HVSRForwardModels(object):
             self.Vs = Vs
             self.Vp = Vp
             self.ex = ex
+            self.fref=fref
+            self.f = f
             
 
     def Transfer_Function(self,):
@@ -89,12 +93,13 @@ class HVSRForwardModels(object):
             matrix of displacements computed at each depth (complex)
         """
 
-        freq = np.logspace(np.log10(self.fre1),np.log10(self.fre2),500)
+        #freq=np.linspace(self.fre1,self.fre2,500)
         #print("Initial freq!!",freq)
         hl = self.h
         vs = self.Vs
         dn = self.ro
         Ds = self.Ds
+        freq=self.f
         qs = np.ones_like(vs)*(1.0/(2.0*Ds))
         inc_ang=0. 
         depth=0.
@@ -274,142 +279,99 @@ class HVSRForwardModels(object):
 
 
     def HV(self,):
-        # Needs a cross-check against the matlab code for high freq shift.
-        # ============================================================================
-        # Code courtesy of OpenHVSR/Model HVSR.
-        # Converted in Python by CONeill
-        # Assumes body wave hum in transfer function (not Rayleigh ellipticity)
-        # Note uses quality factor Qs, not damping. Does the conversion internally. 
-        # INPUT:
-        # vp   = P-wave velocity vector (m/s)   (for all layers + half-space)
-        # vs   = S-wave velocity vector (m/s)   (for all layers + half-space)
-        # ro   = Density vector (g/cm^3)        (for all layers + half-space)
-        # h    = Layer thickness vector (m)     (for all layers + half-space)
-        # qp   = Quality factor vector, P-waves (for all layers + half-space)
-        # qs   = Quality factor vector, S-waves (for all layers + half-space)
-        # ex   = Exponent in Q(f) = Q(1.0 Hz)*f^ex 
-        #        (ex = 0 --> no frequency-dependence of Q)
-        # fref = Frequency at which velocity is measured (Hz) 
-        #        (fref=0 --> no body-wave velocity dispersion)
-        # f    = Frequency vector (Hz)
-
-        #  OUTPUT:
-        # HVSR = AMP_S./AMP_P;
-        # AMP_P= Amplification spectrum for vertically incident P-waves
-        # AMP_S= Amplification spectrum for vertically incident S-waves
-        #Vp,Vs,ro,h,qp,qs,ex,fref,f
-        Ds = self.Ds
-        Dp = self.Dp
-        h =  self.h
-        ro = self.ro
-        Vs = self.Vs
-        Vp = self.Vp
-        ex = self.ex
-        f = np.logspace(np.log10(self.fre1),np.log10(self.fre2),500)
-        fref = 1. # Frequency at which vel is measured. Assumed to be 1. 
-        qp = np.ones_like(Vp)*(1.0/(2.0*Dp))
-        qs = np.ones_like(Vs)*(1.0/(2.0*Ds))
-
-        h[-1]=9e4;
-        ns=len(Vp)
-        nf=len(f)
-        nsl=ns-1
-        HVSR=np.array([]) 
-        AMP_P=np.array([]) 
-        AMP_S=np.array([])
-        for m in (1,2):           #m=1 for P-waves, m=2 for S-waves
-            TR=np.zeros((50,1),dtype=complex);
-            AR=np.zeros((50,1),dtype=complex);
-            qf=np.zeros((ns,nf),dtype=complex);
-            T=np.zeros((nsl,1),dtype=complex);
-            A=np.zeros((nsl,1),dtype=complex);
-            FI=np.zeros((nsl,1),dtype=complex);
-            Z=np.zeros((nsl,1),dtype=complex);
-            X=np.zeros((nsl,1),dtype=complex);
-            FAC=np.zeros((ns,nf),dtype=complex);  #Increased from nsl to ns - indexing required it below...
-    
-            if (m==1):
-                c=Vp 
-                q=qp
-            else:
-                c=Vs
-                q=qs
-
-            for j in np.arange(0,ns,1):   #Note unlike matlab, arange will stay one short of end value
-                for i in np.arange(0,nf,1):
-                    #print(i,j,q[j],f[i])
-                    qf[j,i]=q[j]*(f[i]**ex)
-
-            #print(qf)
-    
-            idisp=0
-            if fref >0:
-                idisp=1
         
-            for I in np.arange(0,ns-1,1):
-                TR[I]=h[I]/c[I]    # distance/vel=transit time for layer
-                AR[I]=ro[I]*c[I]/ro[I+1]/c[I+1]  # This is an impedance contrast
+        s_amp=self.HV3(self.Vs, self.ro, self.h, self.Ds, self.ex, self.fref, self.f)
+        p_amp=self.HV3(self.Vp, self.ro, self.h, self.Dp, self.ex, self.fref, self.f)
+        hvsr = s_amp/p_amp
+        return(self.f,hvsr)
     
-            TOTT=0
-    
-            for I in np.arange(0,nsl,1):
-                TOTT=TOTT+TR[I]  # Sum of time - total transit time for section
-    
-    
-            X[0]=np.complex(1.,0.)
-            Z[0]=np.complex(1.,0.)
-        
-            if (idisp==0):  
-                FJM1=1
-                FJ=1
-    
-            for J in np.arange(0,nsl,1):
-                for i in np.arange(0,nf,1):
-                    FAC[J,i]=2./(1.+np.sqrt(1.+qf[J,i]**(-2)))*(1.-np.complex(0.,1.)/qf[J,i])
-                    FAC[J,i]=np.sqrt(FAC[J,i])
-    
-            FAC[nsl,0:nf-1]=np.complex(1.,0.) #nsl +1 in matlab - overloading?
-            qf[nsl,0:nf-1]=999999.
-    
-            jpi=1/np.pi
-    
-            AMP=np.zeros( (len(np.arange(0,nf,1)),1) )
-            #print("FAC",np.shape(FAC),np.shape(X),X)
+    def HV3(self,c, ro, h, d, ex, fref, f):
+        # Code adopted From Albarello el al. Suppl. Mat/BW, following from Model HVSR (Herak) and OpenHVSR.
+        # Migrated to pure python and benchmarked by Craig O'Neill Nov 2023.
+        q = 1/(2*d)
+        ns = len(c)
+        nf = len(f)
+        TR=np.zeros((50,1),dtype=complex);
+        AR=np.zeros((50,1),dtype=complex);
+        qf=np.zeros((ns,nf),dtype=complex);
+        T=np.zeros((ns,1),dtype=complex);
+        A=np.zeros((ns,1),dtype=complex);
+        FI=np.zeros((ns,1),dtype=complex);
+        Z=np.zeros((ns,1),dtype=complex);
+        X=np.zeros((ns,1),dtype=complex);
+        FAC=np.zeros((ns,nf),dtype=complex); 
+        frref = fref
+        frkv = f
+        qf = np.zeros((ns, nf))
+        for j in range(ns):
+            for i in range(nf):
+                qf[j, i] = q[j] * frkv[i] ** ex
 
-            for k in np.arange(0,nf,1):
-                ALGF=np.log(f[k]/fref)
-        
-                for J in np.arange(1,nsl,1): #2:(nsl+1)
-            
-                    if (idisp != 0):
-                        FJM1=1.+jpi/qf[J-1,k]*ALGF
-                        FJ  =1.+jpi/qf[J,k]  *ALGF
-            
-                    T[J-1]=TR[J-1]*FAC[J-1,k]/FJM1
-                    A[J-1]=AR[J-1]*FAC[J,k]/FAC[J-1,k]*FJM1/FJ
-                    FI[J-1]=(2*np.pi)*f[k]*T[J-1]
-                    ARG=np.complex(0.,1.)*FI[J-1]
-                    CFI1=np.exp(ARG)
-                    CFI2=np.exp(np.complex(-1.,0.)*ARG)
-                    Z[J]=(1.+A[J-1])*CFI1*Z[J-1]+(1.-A[J-1])*CFI2*X[J-1] #complex impedance
-                    Z[J]=Z[J]*np.complex(0.5,0.0)
-                    X[J]=(1.-A[J-1])*CFI1*Z[J-1]+(1.+A[J-1])*CFI2*X[J-1]
-                    X[J]=X[J]*np.complex(0.5,0.0)
-                    #print(J,nsl,Z[0],Z[J])
+        idisp = 0
+        if frref > 0:
+            idisp = 1
 
-                #print(k,nsl,np.shape(Z),np.size(Z))    
-                AMP[k]=(1./abs(Z[nsl-1]))
+        TR = np.zeros(ns - 1)
+        AR = np.zeros(ns - 1)
 
-            if (m==1): 
-                AMP_P=AMP 
-            else: 
-                AMP_S=AMP
+        for I in range(ns - 1):
+            TR[I] = h[I] / c[I]
+            AR[I] = ro[I] * c[I] / ro[I + 1] / c[I + 1]
 
+        NSL = ns - 1
+        TOTT = sum(TR)
 
-        HVSR=AMP_S/AMP_P
-        #print(np.c_[HVSR,AMP_S,AMP_P])
-        return(f,HVSR[0:-1])
-    
+        #X = np.zeros(NSL + 1, dtype=np.complex128)
+        #Z = np.zeros(NSL + 1, dtype=np.complex128)
+        X[0] = 1.0+0.0j
+        Z[0] = 1.0 + 0.0j
+        II = 1j
+
+        korak = 1
+        if idisp == 0:
+            FJM1 = 1
+            FJ = 1
+
+        FAC = np.zeros((NSL + 2, nf), dtype=np.complex128)
+
+        for J in range(1, NSL + 1):
+            for ii in range(nf):
+                FAC[J - 1, ii] = 2 / (1 + np.sqrt(1 + qf[J - 1, ii] ** (-2))) * (1 - 1j / qf[J - 1, ii])
+                FAC[J - 1, ii] = np.sqrt(FAC[J - 1, ii])
+
+        FAC[NSL, :nf] = 1
+        qf[NSL, :nf] = 999999
+
+        jpi = 1 / 3.14159
+
+        AMP = np.zeros(nf)
+
+        for k in range(0, nf, korak):
+            ALGF = np.log(frkv[k] / frref)
+
+            for J in range(2, NSL + 2):
+                if idisp != 0:
+                    FJM1 = 1 + jpi / qf[J - 2, k] * ALGF
+                    FJ = 1 + jpi / qf[J - 1, k] * ALGF
+
+                T[J - 2] = TR[J - 2] * FAC[J - 2, k] / FJM1
+                A[J - 2] = AR[J - 2] * FAC[J - 1, k] / FAC[J - 2, k] * FJM1 / FJ
+                FI[J - 2] = 6.283186 * frkv[k] * T[J - 2]
+                ARG = 1j * FI[J - 2]
+
+                CFI1 = np.exp(ARG)
+                CFI2 = np.exp(-ARG)
+
+                Z[J - 1] = (1 + A[J - 2]) * CFI1 * Z[J - 2] + (1 - A[J - 2]) * CFI2 * X[J - 2]
+                Z[J - 1] = Z[J - 1] * 0.5
+
+                X[J - 1] = (1 - A[J - 2]) * CFI1 * Z[J - 2] + (1 + A[J - 2]) * CFI2 * X[J - 2]
+                X[J - 1] = X[J - 1] * 0.5
+
+            AMP[k] = 1 / abs(Z[NSL])
+
+        return AMP
+
         
 class HVSR_plotting_functions(object):
     def __init__(self,
@@ -433,8 +395,8 @@ class HVSR_plotting_functions(object):
         DEPTH = np.array([])
         VS = np.array([])
     
-        VSd = np.zeros((8))
-        DEPTHd = np.zeros((8))
+        VSd = np.zeros((np.size(h)*2))
+        DEPTHd = np.zeros(np.size(h)*2)
     
         VS=np.array([])
         DEPTH = np.array([])
@@ -781,6 +743,7 @@ class HVSR_inversion(object):
 				    Vs = np.array([500, 1500, 1500, 1500]),
 				    Vp = np.array([500, 3000, 3000, 3000]),
                     ex = 0.0,
+                    Poisson = 0.4,
 				    filename = None,
                     hvsr=None,
                     hvsr_freq=None,
@@ -798,7 +761,10 @@ class HVSR_inversion(object):
                     hvsr_c_f = None,
                     n=1,
                     n_burn = 1,
-                    L1_old = None
+                    L1_old = None,
+                    Hfac = 100,
+                    Vfac = 2000
+
 
 					):
             self.fre1 = fre1
@@ -810,6 +776,7 @@ class HVSR_inversion(object):
             self.Vs = Vs
             self.Vp = Vp
             self.ex = ex
+            self. Poisson = Poisson
             self.filename = filename
             self.hvsr = hvsr
             self.hvsr_freq = hvsr_freq
@@ -828,6 +795,8 @@ class HVSR_inversion(object):
             self.n = n
             self.n_burn = n_burn
             self.L1_old = L1_old
+            self.Hfac = Hfac
+            self.Vfac = Vfac
 
     def moving_average(self, a, n=3) :
         ret = np.cumsum(a, dtype=float)
@@ -839,24 +808,22 @@ class HVSR_inversion(object):
         h=self.h
         #To invert for Vs and h, we use empirical relationships to get consistent Vp and ro.
         if (np.all(Vs > 0)):
-            Vp = 1000*(Vs/1000 + 1.164)/0.902
-            ro=(310*(Vp*1000)**0.25)/1000
+            #Vp = 1000*(Vs/1000 + 1.164)/0.902
+            #ro=(310*(Vp*1000)**0.25)/1000
+            Vp = Vs * np.sqrt( (1-self.Poisson)/(0.5 - self.Poisson))
+            ro= 1740 * (Vp/1000)**0.25
+
         else:
             Vp = 1000*np.ones_like(Vs)
-            ro=(310*(Vp*1000)**0.25)/1000
+            #ro=(310*(Vp*1000)**0.25)/1000
+            ro= 1740 * (Vp/1000)**0.25
         hvsr=self.hvsr
         hvsr_freq = self.hvsr_freq
         
-        mod1 = HVSRForwardModels(ro=ro,Vs=Vs,Vp=Vp,fre1=self.fre1,fre2=self.fre2, Ds=self.Ds,Dp=self.Dp,h=self.h)
-        #f_c, hvsr_c = mod1.Transfer_Function()
-        #print(f_c,hvsr_c)
-        #self.hvsr_c = hvsr_c
-        #self.hvsr_c_f = f_c
-        #fm=interp1d(f_c,hvsr_c,fill_value="extrapolate")
-        #hvsr_2=fm(hvsr_freq)
+        mod1 = HVSRForwardModels(ro=ro,Vs=Vs,Vp=Vp,fre1=self.fre1,fre2=self.fre2, f=hvsr_freq, Ds=self.Ds,Dp=self.Dp,h=self.h)
         try:
             #mod1 = HVSRForwardModels(ro=ro,Vs=Vs,Vp=Vp,fre1=self.fre1,fre2=self.fre2, Ds=self.Ds,Dp=self.Dp,h=self.h)
-            f_c, hvsr_c = mod1.Transfer_Function()
+            f_c, hvsr_c = mod1.HV()  #Change to try against Transfer function
             #print("L1, transfer function -1:",hvsr_c[-1])
             self.hvsr_c = hvsr_c
             self.hvsr_c_f = f_c
@@ -877,13 +844,18 @@ class HVSR_inversion(object):
         if (np.any(h < 0)):
             #print("hi") #Not seeing this - why?
             hvsr_2=np.ones_like(hvsr) * 1e9
-        L1 = np.sum(np.abs(hvsr_2 - hvsr))
+        std1 = np.std(hvsr[ ( hvsr_freq > 10)&( hvsr_freq < 50)])
+        filt = hvsr > (np.mean(hvsr) + 0.6*std1)
+        L1_peak = np.sum(np.abs(hvsr_2[filt] - hvsr[filt])**2)
+        L1_all = np.sum((np.abs(hvsr_2 - hvsr))**1)
+        L1_grad = np.sum(np.abs(np.gradient(hvsr_2) - np.gradient(hvsr))**2)
+        L1 = 0.6*(0.5*L1_peak + 0.5*L1_all) + 0.4*L1_grad
         return L1
 
 
     def MCMC_step(self,i):
-        Vfac=500
-        hfac=10
+        Vfac=self.Vfac
+        hfac=self.Hfac
         x_start = np.append(self.Vs/Vfac, self.h/hfac)
         dim2=np.size(self.Vs)
 
@@ -922,8 +894,6 @@ class HVSR_inversion(object):
         print(i,L1,self.L1_best,Vs[0])
 
         # Now move
-        Vfac=500
-        hfac=10
         x_start = np.append(self.Vs/Vfac, self.h/hfac)
 
         self.Vs_ensemble[i] = self.Vs
@@ -946,8 +916,10 @@ class HVSR_inversion(object):
         self.h=np.abs(x_start[dim2:] + noise[dim2:])*hfac
 
         #print("...",Vs0a,noise)
-        self.Vp = (Vs0a + 1.164)/0.902   # Garnders relationships etc
-        self.ro=(310*(self.Vp*1000)**0.25)/1000
+        #self.Vp = (Vs0a + 1.164)/0.902   # Garnders relationships etc
+        #self.ro=(310*(self.Vp*1000)**0.25)/1000
+        self.Vp = Vs0a * np.sqrt( (1-self.Poisson)/(0.5 - self.Poisson))
+        self.ro= 1740 * (self.Vp/1000)**0.25
 
     def MCMC_walk(self,):
         n = self.n
@@ -968,9 +940,9 @@ class HVSR_inversion(object):
         return(self.h,self.Vs_ensemble,self.h_ensemble,self.Vs_best,self.L1_best,self.hvsr_best,self.hvsr_best_f)
 
     def nelder_mead(self,
-                step=250.1, no_improve_thr=10e-6,
+                step=125.1, no_improve_thr=1e-4,
                 no_improv_break=40, max_iter=0,
-                alpha=12.5, gamma=18., rho=0.65, sigma=0.6):
+                alpha=11.5, gamma=17., rho=0.55, sigma=0.55):
         '''
             @param f (function): function to optimize, must return a scalar score
             and operate over a numpy array of the same dimensions as x_start
@@ -987,8 +959,8 @@ class HVSR_inversion(object):
         '''
 
         # init
-        Vfac=500
-        hfac=10
+        Vfac=self.Vfac
+        hfac=self.Hfac
         x_start = np.append(self.Vs/Vfac, self.h/hfac)
 
         dim2=np.size(self.Vs)
@@ -1092,8 +1064,8 @@ class HVSR_inversion(object):
 
 
     def Amoeba_crawl(self,):
-        Vfac=500
-        hfac=10
+        Vfac=self.Vfac
+        hfac=self.Hfac
         dim2 = np.size(self.Vs)
         result = self.nelder_mead()
         Vs = result[0][:dim2]*Vfac
