@@ -449,7 +449,8 @@ class HVSR_Processing(object):
                  HVSR = np.array([]),
                  d = np.array([]),
                  HVpower = np.array([]),
-                 normalised = 1
+                 normalised = 1,
+		 chainage = 0
                     ):
         self.filename = filename
         self.header_lines = header_lines
@@ -479,6 +480,7 @@ class HVSR_Processing(object):
         self.d = d
         self.HVpower = HVpower
         self.normalised = normalised
+	self.chainage = chainage
 
 
 
@@ -639,7 +641,7 @@ class HVSR_Processing(object):
         flt = (HV1a) < np.min((hv_norm))
         HV1a[flt] = np.min(hv_norm)
         #plt.plot(HV1a,Y[:,0],color="xkcd:blood red")
-        datafile = str(self.filename)+"_depth_"+str(chainage)+"m.dat"
+        datafile = str(self.filename)+"_depth_"+str(self.chainage)+"m.dat"
         np.savetxt(datafile,np.c_[HV1a,Y[:,0]])
         self.d = Y[:,0]
         self.HVpower = HV1a
