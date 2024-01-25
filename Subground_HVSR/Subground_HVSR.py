@@ -479,10 +479,8 @@ class HVSR_Processing(object):
         self.fZ = fZ
         self.d = d
         self.HVpower = HVpower
-        self.normalised = normalised
+	self.normalised = normalised
 	self.chainage = chainage
-
-
 
     def import_HVSR(self,):
         """ Reads a typicaly Tromino data file, or equivalent
