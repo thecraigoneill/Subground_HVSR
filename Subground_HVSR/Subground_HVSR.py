@@ -450,7 +450,7 @@ class HVSR_Processing(object):
                  d = np.array([]),
                  HVpower = np.array([]),
                  normalised = 1,
-		 chainage = 0
+                 chainage = 0
                     ):
         self.filename = filename
         self.header_lines = header_lines
@@ -479,8 +479,8 @@ class HVSR_Processing(object):
         self.fZ = fZ
         self.d = d
         self.HVpower = HVpower
-	self.normalised = normalised
-	self.chainage = chainage
+        self.normalised = normalised
+        self.chainage = chainage
 
     def import_HVSR(self,):
         """ Reads a typicaly Tromino data file, or equivalent
