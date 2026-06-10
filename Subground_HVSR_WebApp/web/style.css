@@ -1,0 +1,308 @@
+/* HVSR_App/web/style.css — system fonts only, no external resources */
+
+:root {
+    --font-ui:   -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "Cascadia Mono", "Consolas", "Courier New", monospace;
+    --bg-base:   #0f0f11;
+    --bg-panel:  #16181d;
+    --bg-card:   #1e2128;
+    --bg-input:  #252830;
+    --border:    #2d323c;
+    --text:      #e0e0e0;
+    --text-dim:  #9ca3af;
+    --text-mute: #6b7280;
+    --blue:      #3b82f6;
+    --blue-hi:   #60a5fa;
+    --green:     #34d399;
+    --green-d:   #059669;
+    --yellow:    #fbbf24;
+    --red:       #ef4444;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    font-family: var(--font-ui);
+    margin: 0;
+    padding: 14px;
+    background: var(--bg-base);
+    color: var(--text);
+    font-size: 14px;
+}
+
+.container {
+    max-width: 1550px;
+    margin: 0 auto;
+    background: var(--bg-panel);
+    padding: 14px;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.header-row {
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+h1 {
+    color: #fff;
+    font-weight: 700;
+    font-size: 1.45rem;
+    margin: 0;
+    flex: 0 0 auto;
+}
+
+h3 {
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin: 0 0 8px;
+}
+
+/* ── Buttons ── */
+button {
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    padding: 7px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: var(--font-ui);
+    font-weight: 500;
+    font-size: 0.83rem;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+button:hover     { background: #2563eb; }
+button:disabled  { background: #2a2f3a; color: #4b5563; cursor: not-allowed; }
+button.secondary { background: #2a2f3a; }
+button.secondary:hover { background: #374151; }
+button.success   { background: var(--green-d); }
+button.success:hover { background: #047857; }
+button.success:disabled { background: #2a2f3a; color: #4b5563; }
+button.primary-btn {
+    background: var(--blue);
+    font-weight: 600;
+    padding: 8px 16px;
+}
+button.small { padding: 4px 10px; font-size: 0.75rem; }
+
+button.success-big {
+    background: var(--green-d);
+    color: #fff;
+    padding: 12px 14px;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+button.success-big:hover { background: #047857; }
+button.success-big:disabled { background: #2a2f3a; color: #4b5563; }
+
+/* ── Inputs ── */
+input[type="number"], input[type="text"] {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 7px;
+    border-radius: 5px;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    width: 100%;
+}
+input[type="number"]:focus { outline: none; border-color: var(--blue); }
+
+input[type="radio"] { accent-color: var(--blue); cursor: pointer; }
+
+label {
+    font-size: 0.74rem;
+    color: var(--text-dim);
+    display: block;
+    margin-bottom: 2px;
+}
+
+.radio-lbl {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.82rem;
+    color: #c0c0d0;
+    cursor: pointer;
+    margin: 0;
+}
+
+.auto-tag {
+    color: var(--green);
+    font-size: 0.62rem;
+    font-weight: 600;
+    margin-left: 3px;
+}
+
+/* ── Status bar ── */
+#status-bar {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-family: var(--font-mono);
+    font-size: 0.77rem;
+    color: var(--blue-hi);
+    min-height: 18px;
+}
+
+/* ── Control groups ── */
+.control-group {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+/* ── Top file bar (single row, compact) ── */
+.file-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.file-fields {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.file-actions {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    margin-left: auto;
+    flex-wrap: wrap;
+}
+
+.ff {
+    display: flex;
+    flex-direction: column;
+    min-width: 110px;
+}
+.ff.narrow { min-width: 64px; }
+.ff input { font-size: 0.78rem; padding: 5px 7px; }
+
+/* ── Waveform ── */
+#waveform-container {
+    background: #1a1d22;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    min-height: 110px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: default;
+}
+#waveform-container.mask-mode {
+    cursor: crosshair;
+    border-color: var(--red);
+}
+
+/* ── Middle row: HVSR + Model ── */
+.middle-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    align-items: stretch;
+}
+
+/* ── Bottom row: 3-column strip (inversion · MCMC · initial model) ── */
+.bottom-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    align-items: flex-start;
+}
+.bottom-col {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 12px;
+}
+
+.hvsr-col   { flex: 2 1 0; min-width: 0; }
+.model-col  {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+#hvsr-container {
+    background: #1a1d22;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    min-height: 580px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+#model-container {
+    background: #1a1d22;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    min-height: 380px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+/* ── Layer table ── */
+.layer-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+}
+.layer-table td {
+    padding: 2px 2px;
+}
+.layer-table input[type="number"] {
+    width: 100%;
+    min-width: 50px;
+    font-size: 0.76rem;
+    padding: 3px 4px;
+}
+
+/* ── Mask chips ── */
+.mask-chip {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid var(--red);
+    color: #fca5a5;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.mask-chip button {
+    background: transparent;
+    color: #fca5a5;
+    padding: 0 4px;
+    font-size: 0.78rem;
+    border-radius: 3px;
+    line-height: 1;
+}
+.mask-chip button:hover { background: rgba(239,68,68,0.25); color: #fff; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #1a1d22; }
+::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }

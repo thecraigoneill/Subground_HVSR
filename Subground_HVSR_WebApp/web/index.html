@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HVSR Inversion Viewer</title>
+    <link rel="stylesheet" href="style.css">
+    <script type="text/javascript" src="/eel.js"></script>
+</head>
+<body>
+<div class="container">
+
+    <div class="header-row">
+        <h1>HVSR Inversion Viewer</h1>
+        <div id="status-bar">Load a Tromino .dat file to begin.</div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         TOP BAND: file controls (Load + auto-detected params + Compute)
+    ══════════════════════════════════════════════════════════════════════ -->
+    <div class="control-group" style="margin-top:10px;padding:10px 12px;">
+        <div class="file-bar">
+            <button onclick="openFile()" class="primary-btn">Open .dat File</button>
+
+            <div class="file-fields">
+                <div class="ff">
+                    <label>Sampling (Hz) <span class="auto-tag">auto</span></label>
+                    <input type="number" id="sampling" value="512" step="1">
+                </div>
+                <div class="ff">
+                    <label>Header lines <span class="auto-tag">auto</span></label>
+                    <input type="number" id="header-lines" value="33" step="1">
+                </div>
+                <div class="ff narrow">
+                    <label>N col</label>
+                    <input type="number" id="n-col" value="0" step="1">
+                </div>
+                <div class="ff narrow">
+                    <label>E col</label>
+                    <input type="number" id="e-col" value="1" step="1">
+                </div>
+                <div class="ff narrow">
+                    <label>Z col</label>
+                    <input type="number" id="z-col" value="2" step="1">
+                </div>
+                <button onclick="applyFileParams()" class="secondary">Apply &amp; Reload</button>
+            </div>
+
+            <div class="file-actions">
+                <div class="ff narrow">
+                    <label>Welch win (s)</label>
+                    <input type="number" id="win-sec" value="10" step="1" min="1">
+                </div>
+                <button onclick="computeHvsr()" id="compute-btn" class="success" disabled>Compute HVSR</button>
+                <button onclick="saveHvsr()"   id="save-hvsr-btn" class="secondary" disabled>Save HVSR CSV</button>
+            </div>
+        </div>
+
+        <div id="file-label" style="margin-top:6px;font-size:0.74rem;color:#6b7280;
+             font-family:var(--font-mono);">No file loaded</div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         WAVEFORM (with channel radios + MASK drawing radio)
+    ══════════════════════════════════════════════════════════════════════ -->
+    <div class="control-group" style="margin-top:10px;padding:8px 12px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap;">
+            <span style="font-size:0.78rem;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Waveform</span>
+
+            <!-- Channel selector -->
+            <span style="font-size:0.74rem;color:#6b7280;">Channel:</span>
+            <label class="radio-lbl"><input type="radio" name="ch" value="Z" checked onchange="setChannel(this.value)"> Z</label>
+            <label class="radio-lbl"><input type="radio" name="ch" value="N" onchange="setChannel(this.value)"> N–S</label>
+            <label class="radio-lbl"><input type="radio" name="ch" value="E" onchange="setChannel(this.value)"> E–W</label>
+
+            <!-- Divider -->
+            <span style="border-left:1px solid #2d323c;height:18px;"></span>
+
+            <!-- Mask mode toggle -->
+            <span style="font-size:0.74rem;color:#6b7280;">Mode:</span>
+            <label class="radio-lbl" style="color:#fbbf24;">
+                <input type="radio" name="wf-mode" value="view" checked onchange="setWaveMode('view')"> View
+            </label>
+            <label class="radio-lbl" style="color:#ef4444;">
+                <input type="radio" name="wf-mode" value="mask" onchange="setWaveMode('mask')"> Draw mask
+            </label>
+            <button onclick="clearMasks()" class="secondary small">Clear masks</button>
+            <span id="wave-info" style="font-size:0.74rem;color:#6b7280;font-family:var(--font-mono);margin-left:auto;"></span>
+        </div>
+
+        <div id="waveform-container" onclick="handleWaveClick(event)">
+            <div id="wave-placeholder" style="color:#4b5563;padding:30px;text-align:center;font-size:0.85rem;">
+                Waveform appears here after loading
+            </div>
+            <img id="waveform-img" style="display:none;width:100%;">
+        </div>
+
+        <div id="wave-click-info" style="margin-top:6px;background:var(--bg-input);
+             padding:5px 10px;border-radius:5px;font-family:var(--font-mono);
+             font-size:0.76rem;color:#9ca3af;">
+            Mouse: t = — s
+        </div>
+
+        <!-- Active mask chips -->
+        <div id="mask-list-wrap" style="margin-top:6px;display:none;">
+            <div style="font-size:0.72rem;color:#9ca3af;margin-bottom:3px;">
+                Active mask regions (excluded from HVSR conversion):
+            </div>
+            <div id="mask-list" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         MIDDLE: HVSR (left) + Velocity model with initial-params (right)
+    ══════════════════════════════════════════════════════════════════════ -->
+    <div class="middle-row">
+
+        <!-- HVSR plot column -->
+        <div class="hvsr-col">
+            <div class="control-group" style="padding:8px 12px;">
+                <!-- Row 1: freq range + display controls -->
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap;">
+                    <span style="font-size:0.78rem;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">
+                        HVSR (spectra + ratio)
+                    </span>
+                    <span style="font-size:0.72rem;color:#6b7280;">f range (Hz):</span>
+                    <input type="number" id="fmin" value="0.5" step="0.1" min="0.05" style="width:64px;">
+                    <span style="color:#6b7280;">to</span>
+                    <input type="number" id="fmax" value="50"  step="1"   min="1"    style="width:64px;">
+                    <button onclick="refreshHvsr()" class="secondary small">Replot</button>
+                    <label class="radio-lbl" style="font-size:0.78rem;">
+                        <input type="checkbox" id="show-samples" onchange="refreshHvsr()"> Show samples
+                    </label>
+                    <button onclick="saveHvsrSvg()" id="save-hvsr-svg-btn" class="secondary small" disabled>Save SVG</button>
+                    <span id="hvsr-info" style="font-size:0.72rem;color:#6b7280;font-family:var(--font-mono);margin-left:auto;"></span>
+                </div>
+                <!-- Row 2: peak detection controls -->
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;
+                            padding:5px 8px;background:var(--bg-input);border-radius:6px;">
+                    <span style="font-size:0.74rem;color:#9ca3af;font-weight:600;">Peak detection:</span>
+                    <label style="display:inline;font-size:0.72rem;color:#6b7280;">
+                        prom &lt;20 Hz
+                    </label>
+                    <input type="number" id="pk-prom-lo" value="0.2" step="0.05" min="0.05" max="5"
+                           style="width:60px;" onchange="redetectAndReplot()">
+                    <label style="display:inline;font-size:0.72rem;color:#6b7280;">
+                        prom ≥20 Hz
+                    </label>
+                    <input type="number" id="pk-prom-hi" value="0.5" step="0.05" min="0.05" max="5"
+                           style="width:60px;" onchange="redetectAndReplot()">
+                    <label style="display:inline;font-size:0.72rem;color:#6b7280;">
+                        dist (Hz)
+                    </label>
+                    <input type="number" id="pk-dist-hz" value="2.0" step="0.5" min="0.2" max="20"
+                           style="width:60px;" onchange="redetectAndReplot()">
+                    <span id="pk-count" style="font-size:0.72rem;color:#34d399;font-family:var(--font-mono);"></span>
+                </div>
+
+                <div id="hvsr-container">
+                    <div id="hvsr-placeholder" style="color:#4b5563;padding:60px 30px;text-align:center;font-size:0.9rem;">
+                        Click <strong>Compute HVSR</strong> after loading a file
+                    </div>
+                    <img id="hvsr-img" style="display:none;width:100%;">
+                </div>
+            </div>
+        </div>
+
+        <!-- Velocity model column (with initial-model params underneath) -->
+        <div class="model-col">
+
+            <!-- Velocity model plot + axis controls -->
+            <div class="control-group" style="padding:8px 12px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
+                    <span style="font-size:0.78rem;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">
+                        Velocity model
+                    </span>
+                    <div style="display:flex;gap:6px;">
+                        <button onclick="saveInversion()" class="secondary small" id="save-inv-btn" disabled>Save CSV</button>
+                        <button onclick="saveModelSvg()" class="secondary small" id="save-model-svg-btn" disabled>Save SVG</button>
+                    </div>
+                </div>
+
+                <div id="model-container">
+                    <div id="model-placeholder" style="color:#4b5563;padding:80px 30px;text-align:center;font-size:0.85rem;">
+                        Run the inversion to see initial &amp; final Vs profiles
+                    </div>
+                    <img id="model-img" style="display:none;width:100%;">
+                </div>
+
+                <!-- Axis controls -->
+                <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                    <div class="ff">
+                        <label>Vs min (m/s)</label>
+                        <input type="number" id="vmin-ax" placeholder="auto" step="50">
+                    </div>
+                    <div class="ff">
+                        <label>Vs max (m/s)</label>
+                        <input type="number" id="vmax-ax" placeholder="auto" step="50">
+                    </div>
+                    <div class="ff">
+                        <label>Depth min (m)</label>
+                        <input type="number" id="dmin-ax" placeholder="0" step="1">
+                    </div>
+                    <div class="ff">
+                        <label>Depth max (m)</label>
+                        <input type="number" id="dmax-ax" placeholder="auto" step="5">
+                    </div>
+                </div>
+                <div style="display:flex;gap:6px;margin-top:6px;">
+                    <button onclick="redrawModel()" class="secondary small" style="flex:1;">Apply axis</button>
+                    <button onclick="resetModelAxes()" class="secondary small" style="flex:1;">Reset</button>
+                </div>
+            </div>
+
+        </div><!-- /model-col -->
+    </div><!-- /middle-row -->
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         BOTTOM STRIP: 3 columns — inversion · MCMC · initial model
+    ══════════════════════════════════════════════════════════════════════ -->
+    <div class="bottom-row">
+
+        <!-- LEFT: Inversion settings + INVERT button -->
+        <div class="control-group bottom-col">
+            <h3>Inversion Settings</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                <div class="ff">
+                    <label>Poisson</label>
+                    <input type="number" id="poisson" value="0.4" step="0.01" min="0" max="0.49">
+                </div>
+                <div class="ff">
+                    <label>fre1 (Hz)</label>
+                    <input type="number" id="fre1" value="0.5" step="0.1" min="0.01">
+                </div>
+                <div class="ff">
+                    <label>fre2 (Hz)</label>
+                    <input type="number" id="fre2" value="30" step="1" min="1">
+                </div>
+                <div class="ff">
+                    <label>Vs scale (Vfac)</label>
+                    <input type="number" id="vfac" value="2000" step="100">
+                </div>
+                <div class="ff">
+                    <label>h scale (Hfac)</label>
+                    <input type="number" id="hfac" value="50" step="5">
+                </div>
+                <div class="ff">
+                    <label>Max iterations</label>
+                    <input type="number" id="max-iter" value="200" step="20" min="20">
+                </div>
+                <div class="ff" style="grid-column:span 2;">
+                    <label>Freq pts (calc)</label>
+                    <input type="number" id="n-freq" value="300" step="50" min="50">
+                </div>
+            </div>
+
+            <h3 style="margin-top:12px;">Vs bounds</h3>
+            <div style="font-size:0.7rem;color:#6b7280;margin:-4px 0 6px;">
+                Hard limits — inversion stays within this physical range.
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                <div class="ff">
+                    <label>Vs min (m/s)</label>
+                    <input type="number" id="vs-min" value="150" step="50" min="50">
+                </div>
+                <div class="ff">
+                    <label>Vs max (m/s)</label>
+                    <input type="number" id="vs-max" value="4500" step="100" min="200">
+                </div>
+            </div>
+
+            <h3 style="margin-top:12px;">Objective parameters</h3>
+            <div style="font-size:0.7rem;color:#6b7280;margin:-4px 0 6px;">
+                L = α·L<sub>peak</sub> + β·L<sub>logamp</sub> + γ·L<sub>grad</sub>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+                <div class="ff">
+                    <label>α (peaks)</label>
+                    <input type="number" id="alpha" value="0.3" step="0.05" min="0">
+                </div>
+                <div class="ff">
+                    <label>β (curve)</label>
+                    <input type="number" id="beta" value="0.3" step="0.05" min="0">
+                </div>
+                <div class="ff">
+                    <label>γ (gradient)</label>
+                    <input type="number" id="gamma" value="0.4" step="0.05" min="0">
+                </div>
+            </div>
+            <div class="ff" style="margin-top:6px;">
+                <label>Extra smoothing window (0 = off, odd ≥ 5)</label>
+                <input type="number" id="smooth-win" value="0" step="2" min="0">
+            </div>
+
+            <h3 style="margin-top:12px;">Convergence &amp; simplex</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                <div class="ff">
+                    <label>Vs step (m/s)</label>
+                    <input type="number" id="step-vs" value="200" step="50" min="10">
+                </div>
+                <div class="ff">
+                    <label>h step (m)</label>
+                    <input type="number" id="step-h" value="5" step="1" min="0.1">
+                </div>
+                <div class="ff">
+                    <label>Tolerance</label>
+                    <input type="number" id="tol" value="0.001" step="0.0005" min="1e-6">
+                </div>
+                <div class="ff">
+                    <label>Patience</label>
+                    <input type="number" id="patience" value="25" step="5" min="5">
+                </div>
+            </div>
+
+            <button onclick="runInversion()" id="invert-btn" class="success-big"
+                    style="width:100%;margin-top:10px;" disabled>INVERT HVSR</button>
+            <div id="inv-progress" style="margin-top:6px;font-size:0.74rem;color:#9ca3af;
+                 font-family:var(--font-mono);min-height:18px;"></div>
+        </div>
+
+        <!-- MIDDLE: MCMC settings + Run MCMC button + stats -->
+        <div class="control-group bottom-col">
+            <h3>MCMC Statistics</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                <div class="ff">
+                    <label>Samples (post burn-in)</label>
+                    <input type="number" id="mc-n-samp" value="1500" step="100" min="100">
+                </div>
+                <div class="ff">
+                    <label>Burn-in</label>
+                    <input type="number" id="mc-n-burn" value="500" step="50" min="0">
+                </div>
+                <div class="ff">
+                    <label>Step (log fraction)</label>
+                    <input type="number" id="mc-step" value="0.05" step="0.01" min="0.005">
+                </div>
+                <div class="ff">
+                    <label>Vs step factor</label>
+                    <input type="number" id="mc-step-vs" value="1.0" step="0.1" min="0.1">
+                </div>
+                <div class="ff">
+                    <label>h step factor</label>
+                    <input type="number" id="mc-step-h" value="1.0" step="0.1" min="0.1">
+                </div>
+                <div class="ff">
+                    <label>Temperature</label>
+                    <input type="number" id="mc-T" value="" step="0.01" min="0.001" placeholder="auto">
+                </div>
+            </div>
+
+            <div style="margin-top:8px;font-size:0.72rem;color:#9ca3af;">Acceptance rule:</div>
+            <div style="display:flex;gap:14px;margin-top:2px;">
+                <label class="radio-lbl">
+                    <input type="radio" name="mc-rule" value="mh" checked> MH
+                </label>
+                <label class="radio-lbl">
+                    <input type="radio" name="mc-rule" value="dice"> dice
+                </label>
+                <label class="radio-lbl">
+                    <input type="radio" name="mc-rule" value="both"> both
+                </label>
+            </div>
+
+            <button onclick="runMcmc()" id="mcmc-btn" class="success"
+                    style="width:100%;margin-top:10px;padding:10px;font-weight:700;" disabled>Run MCMC</button>
+            <div id="mc-progress" style="margin-top:6px;font-size:0.74rem;color:#9ca3af;
+                 font-family:var(--font-mono);min-height:18px;"></div>
+            <button onclick="saveMcmc()" id="save-mcmc-btn" class="secondary small"
+                    style="width:100%;margin-top:6px;" disabled>Save MCMC ensemble CSV</button>
+
+            <!-- Posterior stats table -->
+            <div id="mc-stats-wrap" style="margin-top:8px;display:none;">
+                <table class="layer-table" style="font-size:0.72rem;">
+                    <thead><tr style="color:#9ca3af;">
+                        <th style="text-align:left;padding:3px 2px;">L</th>
+                        <th style="text-align:left;padding:3px 2px;">Vs (mean±σ)</th>
+                        <th style="text-align:left;padding:3px 2px;">h (mean±σ)</th>
+                    </tr></thead>
+                    <tbody id="mc-stats-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- RIGHT: Initial Model parameters (layer table) -->
+        <div class="control-group bottom-col">
+            <h3>Initial Model Parameters</h3>
+            <table class="layer-table">
+                <thead><tr style="color:#9ca3af;">
+                    <th style="text-align:left;padding:3px 2px;">L</th>
+                    <th style="text-align:left;padding:3px 2px;">Vs (m/s)</th>
+                    <th style="text-align:left;padding:3px 2px;">h (m)</th>
+                    <th style="text-align:left;padding:3px 2px;">Ds</th>
+                    <th style="text-align:left;padding:3px 2px;">Dp</th>
+                </tr></thead>
+                <tbody id="layer-tbody"></tbody>
+            </table>
+            <div style="margin-top:6px;display:flex;gap:6px;">
+                <button onclick="addLayer()"    class="secondary small">+ Layer</button>
+                <button onclick="removeLayer()" class="secondary small">– Layer</button>
+            </div>
+            <div style="margin-top:6px;font-size:0.7rem;color:#6b7280;">
+                Last layer = half-space (use a large h, e.g. 1000 m).
+            </div>
+        </div>
+
+    </div><!-- /bottom-row -->
+
+</div><!-- /container -->
+<script src="app.js"></script>
+</body>
+</html>
