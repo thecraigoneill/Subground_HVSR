@@ -15,7 +15,7 @@ Layout
 
 Usage
 -----
-1. Run from Anaconda prompt:
+1. Run from Terminal (on Mac) or Anaconda prompt:
        python HVSR_Viewer.py
 
 2. Click "Open .dat File". Sampling rate and header length are detected
@@ -58,10 +58,11 @@ Notes
 - Forward HVSR model: HV3 algorithm from Subground_HVSR
   (Albarello et al. / Herak / OpenHVSR lineage), ported to pure NumPy.
 - Vp and density derived from Vs via Poisson ratio and a Gardner-style
-  density relation (1740 * (Vp/1000)^0.25), matching Subground_HVSR.
+  density relation (1740 * (Vp/1000)^0.25), following Subground_HVSR (for now).
 - Observed HVSR is normalised by its median value so the baseline matches
   the simulated curve (~1.0).
 - Time-domain masks are excluded from the Welch periodogram, so masking
   bad windows directly removes their contribution to the spectra.
 - File dialogs run in a subprocess (_filedialog.py) so they appear in
-  front of Chrome reliably on Windows and macOS.
+  front of Chrome reliably on Windows and macOS (hopefully?)
+

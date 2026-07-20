@@ -361,6 +361,17 @@ function removeLayer() {
 // ══════════════════════════════════════════════════════════════════════════════
 // INVERSION
 // ══════════════════════════════════════════════════════════════════════════════
+// Enable/disable the fixed-Vs input; prefill from layer 1 when first ticked.
+function toggleFixVs0() {
+    const on  = $('fix-vs0').checked;
+    const box = $('vs0-fixed');
+    box.disabled = !on;
+    if (on) {
+        if (box.value === '' && layers.length) box.value = layers[0].Vs;
+        box.focus();
+    }
+}
+
 function runInversion() {
     if (!hvsrReady) return;
 
@@ -387,7 +398,10 @@ function runInversion() {
         patience: parseInt($('patience').value)    || 25,
         vs_min:   parseFloat($('vs-min').value)    || 150,
         vs_max:   parseFloat($('vs-max').value)    || 4500,
+        fix_vs0:  $('fix-vs0').checked,
+        vs0_fixed: parseFloat($('vs0-fixed').value),
     };
+    if (isNaN(params.vs0_fixed)) params.vs0_fixed = null;
     // Replace NaN (empty box) with defaults
     if (isNaN(params.alpha)) params.alpha = 0.3;
     if (isNaN(params.beta))  params.beta  = 0.3;
@@ -465,7 +479,10 @@ function runMcmc() {
         smooth_window: parseInt($('smooth-win').value) || 0,
         vs_min:   parseFloat($('vs-min').value)    || 150,
         vs_max:   parseFloat($('vs-max').value)    || 4500,
+        fix_vs0:  $('fix-vs0').checked,
+        vs0_fixed: parseFloat($('vs0-fixed').value),
     };
+    if (isNaN(params.vs0_fixed)) params.vs0_fixed = null;
 
     $('mcmc-btn').disabled    = true;
     $('invert-btn').disabled  = true;

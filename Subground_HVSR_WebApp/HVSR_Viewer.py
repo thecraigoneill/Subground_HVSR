@@ -27,14 +27,29 @@ DIALOG_SCRIPT = os.path.join(HERE, '_filedialog.py')
 PYTHON_EXE    = sys.executable
 
 
+# Holds the last real dialog failure (not a user cancel), so callers can
+# report the true cause instead of a misleading "Cancelled".
+_LAST_DIALOG_ERR = None
+
+
 def _run_dialog(args):
+    global _LAST_DIALOG_ERR
+    _LAST_DIALOG_ERR = None
     try:
         proc = subprocess.run(
             [PYTHON_EXE, DIALOG_SCRIPT] + args,
             capture_output=True, text=True, timeout=300
         )
-        return (proc.stdout or '').strip()
+        out = (proc.stdout or '').strip()
+        if not out:
+            err = (proc.stderr or '').strip()
+            # Non-zero exit with stderr = genuine failure; empty = user cancel.
+            if proc.returncode not in (0, None) and err:
+                _LAST_DIALOG_ERR = err
+                print(f"Dialog helper failed (exit {proc.returncode}): {err}")
+        return out
     except Exception as e:
+        _LAST_DIALOG_ERR = str(e)
         print(f"Dialog subprocess error: {e}")
         return ''
 
@@ -154,6 +169,9 @@ def open_tromino_file():
     fp = _open_dialog("Select Tromino .dat file",
                       "DAT files=*.dat|Text files=*.txt|All files=*.*")
     if not fp:
+        if _LAST_DIALOG_ERR:
+            return {"success": False,
+                    "error": "File dialog failed: " + _LAST_DIALOG_ERR}
         return {"success": False, "error": "Cancelled"}
     return _load_file(fp)
 
@@ -659,7 +677,8 @@ def _nelder_mead(Vs0, h0, hvsr_obs, freq_obs, freq_calc, Ds, Dp,
                  poisson, Vfac, Hfac, max_iter, status_cb=None,
                  vs_min=150.0, vs_max=4500.0, h_min=1.0,
                  alpha_w=0.3, beta_w=0.3, gamma_w=0.4, smooth_window=0,
-                 step_vs=200.0, step_h=5.0, tol=1e-3, patience=25):
+                 step_vs=200.0, step_h=5.0, tol=1e-3, patience=25,
+                 fixed_vs0=None):
     """Nelder-Mead simplex optimisation for HVSR inversion.
 
     key parameters
@@ -670,12 +689,18 @@ def _nelder_mead(Vs0, h0, hvsr_obs, freq_obs, freq_calc, Ds, Dp,
                 not improved by more than `tol * best` over `patience` iterations.
                 E.g. tol=1e-3 means <0.1% improvement triggers early stop.
     patience  : number of consecutive non-improving iterations before early stop.
+    fixed_vs0 : if not None, the Vs of the first (top) layer is held fixed at
+                this value throughout the search — the optimiser only adjusts
+                the remaining layers' Vs and all thicknesses.
     """
     dim_vs = len(Vs0); dim_h = len(h0); dim = dim_vs + dim_h
 
     def vec_to_params(x):
         Vs = np.clip(np.abs(x[:dim_vs] * Vfac), vs_min, vs_max)
         h  = np.clip(np.abs(x[dim_vs:] * Hfac), h_min, None)
+        if fixed_vs0 is not None:
+            Vs = Vs.copy()
+            Vs[0] = fixed_vs0
         return Vs, h
 
     def f_score(x):
@@ -749,7 +774,8 @@ def _mcmc_walk(Vs0, h0, hvsr_obs, freq_obs, freq_calc, Ds, Dp,
                vs_min=150.0, vs_max=4500.0, h_min=1.0, h_max=5000.0,
                status_cb=None, T=None,
                acceptance_rule='mh',
-               alpha_w=0.3, beta_w=0.3, gamma_w=0.4, smooth_window=0):
+               alpha_w=0.3, beta_w=0.3, gamma_w=0.4, smooth_window=0,
+               fixed_vs0=None):
     """Random-walk sampler in LOG-SPACE for Vs and h.
 
     Proposal: log10(Vs) and log10(h) get Gaussian perturbations with
@@ -781,6 +807,8 @@ def _mcmc_walk(Vs0, h0, hvsr_obs, freq_obs, freq_calc, Ds, Dp,
 
     Vs_cur = np.clip(np.asarray(Vs0, dtype=float).copy(), vs_min, vs_max)
     h_cur  = np.clip(np.asarray(h0,  dtype=float).copy(), h_min,  h_max)
+    if fixed_vs0 is not None:
+        Vs_cur[0] = fixed_vs0
     L_cur  = f_score_at(Vs_cur, h_cur)
 
     Vs_best = Vs_cur.copy(); h_best = h_cur.copy(); L_best = L_cur
@@ -814,6 +842,8 @@ def _mcmc_walk(Vs0, h0, hvsr_obs, freq_obs, freq_calc, Ds, Dp,
         log_h_prop  = np.clip(log_h_prop,  log_h_min,  log_h_max)
         Vs_prop = 10 ** log_Vs_prop
         h_prop  = 10 ** log_h_prop
+        if fixed_vs0 is not None:
+            Vs_prop[0] = fixed_vs0
 
         L_prop = f_score_at(Vs_prop, h_prop)
 
@@ -897,6 +927,20 @@ def run_inversion(params):
         vs_min_u = float(params.get('vs_min',   150.0))
         vs_max_u = float(params.get('vs_max',   4500.0))
 
+        # Optional: hold the first (top) layer's Vs fixed at a prescribed value
+        fixed_vs0 = None
+        if params.get('fix_vs0'):
+            fv = params.get('vs0_fixed', None)
+            if fv in (None, '', 'None'):
+                fixed_vs0 = float(Vs0[0])      # fall back to table's layer-1 Vs
+            else:
+                fixed_vs0 = float(fv)
+            # Honour the prescribed value exactly: seed it into the initial
+            # model and widen the hard Vs bounds so it is never rejected.
+            Vs0 = Vs0.copy(); Vs0[0] = fixed_vs0
+            vs_min_u = min(vs_min_u, fixed_vs0)
+            vs_max_u = max(vs_max_u, fixed_vs0)
+
         if len(Vs0) != len(h0):
             return {"success": False, "error": "Vs_init and h_init must have same length"}
         if len(Vs0) < 2:
@@ -927,6 +971,7 @@ def run_inversion(params):
             smooth_window=sm_win,
             step_vs=step_vs, step_h=step_h, tol=tol, patience=patience,
             vs_min=vs_min_u, vs_max=vs_max_u,
+            fixed_vs0=fixed_vs0,
         )
 
         Vp_b, ro_b = _make_petro(Vs_b, poisson)
@@ -984,6 +1029,18 @@ def run_mcmc(params):
         vs_min_u = float(params.get('vs_min',   150.0))
         vs_max_u = float(params.get('vs_max',   4500.0))
 
+        # Optional: hold the first (top) layer's Vs fixed at a prescribed value
+        fixed_vs0 = None
+        if params.get('fix_vs0'):
+            fv = params.get('vs0_fixed', None)
+            if fv in (None, '', 'None'):
+                fixed_vs0 = float(Vs0[0])
+            else:
+                fixed_vs0 = float(fv)
+            Vs0 = Vs0.copy(); Vs0[0] = fixed_vs0
+            vs_min_u = min(vs_min_u, fixed_vs0)
+            vs_max_u = max(vs_max_u, fixed_vs0)
+
         # MCMC-specific
         n_samp   = int(params.get('n_samp',     1500))
         n_burn   = int(params.get('n_burn',     500))
@@ -1019,6 +1076,7 @@ def run_mcmc(params):
             smooth_window=sm_win,
             vs_min=vs_min_u, vs_max=vs_max_u,
             status_cb=status_cb,
+            fixed_vs0=fixed_vs0,
         )
 
         Vs_best = result['Vs_best']
